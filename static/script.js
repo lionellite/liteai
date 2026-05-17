@@ -141,12 +141,83 @@ function renderMessage(role, content, animate = true) {
 
 // ─── Export Message ───
 async function exportMsg(btn, fmt) {
-    const content = btn.closest('.msg-body').querySelector('.msg-content').innerText;
+    const msgContentEl = btn.closest('.msg-body').querySelector('.msg-content');
+    const textContent = msgContentEl.innerText;
+    
+    if (fmt === 'docx') {
+        const htmlContent = `
+        <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+        <head>
+            <meta charset="utf-8">
+            <title>Export DOCX</title>
+            <style>
+                body { font-family: 'Calibri', 'Arial', sans-serif; font-size: 11pt; line-height: 1.5; }
+                h1 { color: #2E74B5; font-size: 16pt; margin-bottom: 12pt; }
+                h2 { color: #2E74B5; font-size: 14pt; margin-top: 12pt; margin-bottom: 8pt; }
+                h3 { color: #1F4D78; font-size: 12pt; font-weight: bold; }
+                p { margin-bottom: 10pt; }
+                li { margin-bottom: 5pt; }
+            </style>
+        </head>
+        <body>
+            ${msgContentEl.innerHTML}
+        </body>
+        </html>
+        `;
+        const blob = new Blob(['\ufeff', htmlContent], { type: 'application/msword' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = 'liteai_export.doc';
+        a.click(); URL.revokeObjectURL(url);
+        return;
+    }
+
+    if (fmt === 'pptx') {
+        try {
+            const pres = new pptxgen();
+            const sections = textContent.split(/\n---\n/);
+            let slidesData = sections;
+            if (sections.length === 1) {
+                slidesData = textContent.split(/\n##\s+/).filter(Boolean).map((s, i) => (i === 0 && !textContent.startsWith('## ')) ? s : '## ' + s);
+            }
+
+            slidesData.forEach(section => {
+                const lines = section.split('\n').map(l => l.trim()).filter(Boolean);
+                if (lines.length === 0) return;
+
+                let title = "Diapositive";
+                let bullets = [];
+
+                if (lines[0].startsWith('# ')) { title = lines[0].substring(2).replace(/\*\*/g, ''); lines.shift(); }
+                else if (lines[0].startsWith('## ')) { title = lines[0].substring(3).replace(/\*\*/g, ''); lines.shift(); }
+
+                lines.forEach(line => {
+                    let cleanLine = line.replace(/\*\*/g, '');
+                    if (cleanLine.startsWith('- ') || cleanLine.startsWith('* ')) {
+                        bullets.push({ text: cleanLine.substring(2), options: { bullet: true, fontSize: 18 } });
+                    } else if (cleanLine) {
+                        bullets.push({ text: cleanLine, options: { fontSize: 18, breakLine: true } });
+                    }
+                });
+
+                const slide = pres.addSlide();
+                slide.addText(title, { x: 0.5, y: 0.5, w: '90%', h: 1, fontSize: 32, bold: true, color: '363636' });
+                if (bullets.length > 0) {
+                    slide.addText(bullets, { x: 0.5, y: 1.8, w: '90%', h: 4, color: '363636', align: 'left', valign: 'top' });
+                }
+            });
+            pres.writeFile({ fileName: 'liteai_presentation.pptx' });
+        } catch (e) {
+            alert("Erreur lors de la génération de la présentation: " + e.message);
+        }
+        return;
+    }
+
     try {
         const res = await fetch(`/api/export/${fmt}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
-            body: JSON.stringify({ content, filename: 'liteai_reponse' })
+            body: JSON.stringify({ content: textContent, filename: 'liteai_reponse' })
         });
         if (!res.ok) { alert('Erreur export'); return; }
         const blob = await res.blob();
@@ -266,7 +337,35 @@ async function handleSend() {
                 try {
                     const d = JSON.parse(raw);
                     if (d.session_id) currentSessionId = d.session_id;
-                    if (d.content) {
+                    
+                    if (d.type === 'search_status') {
+                        let statusEl = aiContentEl.parentElement.querySelector('.search-status-el');
+                        if (!statusEl) {
+                            statusEl = document.createElement('div');
+                            statusEl.className = 'search-status-el';
+                            statusEl.style.fontSize = '0.8rem';
+                            statusEl.style.color = 'var(--text-faint)';
+                            statusEl.style.marginBottom = '0.5rem';
+                            statusEl.style.fontStyle = 'italic';
+                            aiContentEl.parentElement.insertBefore(statusEl, aiContentEl);
+                        }
+                        statusEl.textContent = '🌐 ' + d.status;
+                        if (d.status.includes('Analyse')) {
+                            setTimeout(() => statusEl.remove(), 2000);
+                        }
+                    } else if (d.type === 'search_results') {
+                        let sourcesEl = aiContentEl.parentElement.querySelector('.search-sources');
+                        if (!sourcesEl) {
+                            sourcesEl = document.createElement('div');
+                            sourcesEl.className = 'search-sources';
+                            aiContentEl.parentElement.insertBefore(sourcesEl, aiContentEl);
+                        }
+                        sourcesEl.innerHTML = d.sources.map((src, i) => 
+                            `<a href="${src.url}" target="_blank" class="source-chip" title="${src.title}">
+                                <strong>[${i+1}]</strong> <span>${src.title}</span>
+                            </a>`
+                        ).join('');
+                    } else if (d.content) {
                         fullResponse += d.content;
                         aiContentEl.innerHTML = formatAIContent(fullResponse);
                         addCopyButtons(aiContentEl);

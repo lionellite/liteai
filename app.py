@@ -39,14 +39,21 @@ def perform_web_search(query):
         from duckduckgo_search import DDGS
         results = DDGS().text(query, max_results=3)
         if not results:
-            return ""
+            return None, ""
+        
+        sources = []
         context = "Voici des informations récentes trouvées sur le web pour répondre à la question :\n\n"
         for i, res in enumerate(results):
-            context += f"Source {i+1} ({res.get('title', 'Sans titre')}):\n{res.get('body', '')}\n\n"
-        return context
+            sources.append({
+                "title": res.get('title', 'Sans titre'),
+                "url": res.get('href', ''),
+                "body": res.get('body', '')
+            })
+            context += f"Source {i+1} ({res.get('title', '')}):\n{res.get('body', '')}\n\n"
+        return sources, context
     except Exception as e:
         print(f"Erreur recherche web: {e}")
-        return ""
+        return None, ""
 
 # ─────────────────────────────────────────────
 #  MODÈLES DISPONIBLES
@@ -388,10 +395,13 @@ def chat_stream():
 
         search_context = ""
         if web_search:
-            yield f"data: {json.dumps({'content': '*(Recherche web en cours...)*\\n', 'session_id': session_id, 'model': model_key})}\n\n"
-            search_context = perform_web_search(user_content)
-            if search_context:
-                yield f"data: {json.dumps({'content': '*(Résultats trouvés, analyse en cours...)*\\n\\n', 'session_id': session_id, 'model': model_key})}\n\n"
+            yield f"data: {json.dumps({'type': 'search_status', 'status': 'Recherche sur le web...'})}\n\n"
+            sources, search_context = perform_web_search(user_content)
+            if sources:
+                yield f"data: {json.dumps({'type': 'search_results', 'sources': sources})}\n\n"
+                yield f"data: {json.dumps({'type': 'search_status', 'status': 'Analyse des résultats...'})}\n\n"
+            else:
+                yield f"data: {json.dumps({'type': 'search_status', 'status': 'Aucun résultat pertinent trouvé.'})}\n\n"
 
         full_ai = ""
         try:
@@ -547,36 +557,6 @@ def export_file(fmt):
         buf = io.BytesIO(content.encode('utf-8'))
         return send_file(buf, mimetype='text/markdown', as_attachment=True, download_name=f"{filename_base}.md")
 
-    elif fmt == 'docx':
-        from docx import Document
-        from docx.shared import Pt
-        doc = Document()
-        # Parse basic markdown for better design
-        for line in content.split('\n'):
-            line = line.strip()
-            if not line:
-                continue
-            if line.startswith('# '):
-                doc.add_heading(line[2:].replace('**', ''), level=1)
-            elif line.startswith('## '):
-                doc.add_heading(line[3:].replace('**', ''), level=2)
-            elif line.startswith('### '):
-                doc.add_heading(line[4:].replace('**', ''), level=3)
-            elif line.startswith('- ') or line.startswith('* '):
-                doc.add_paragraph(line[2:].replace('**', ''), style='List Bullet')
-            else:
-                p = doc.add_paragraph()
-                parts = line.split('**')
-                for i, part in enumerate(parts):
-                    run = p.add_run(part)
-                    if i % 2 != 0:
-                        run.bold = True
-        buf = io.BytesIO()
-        doc.save(buf)
-        buf.seek(0)
-        return send_file(buf, mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                         as_attachment=True, download_name=f"{filename_base}.docx")
-
     elif fmt == 'xlsx':
         import pandas as pd
         # Détection de tableaux markdown
@@ -613,57 +593,6 @@ def export_file(fmt):
         buf.seek(0)
         return send_file(buf, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                          as_attachment=True, download_name=f"{filename_base}.xlsx")
-
-    elif fmt == 'pptx':
-        from pptx import Presentation
-        prs = Presentation()
-        # Séparer par "---" (format standard de slide markdown) ou par titres "##"
-        sections = re.split(r'\n---\n', content)
-        if len(sections) == 1:
-            parts = re.split(r'\n##\s+', '\n' + content)
-            sections = ["## " + p for p in parts[1:]] if len(parts) > 1 else [content]
-        
-        for section in sections:
-            lines = [l.strip() for l in section.split('\n') if l.strip()]
-            if not lines: continue
-            
-            title = "Diapositive"
-            bullets = []
-            
-            if lines[0].startswith('# '):
-                title = lines[0][2:].replace('**', '')
-                lines = lines[1:]
-            elif lines[0].startswith('## '):
-                title = lines[0][3:].replace('**', '')
-                lines = lines[1:]
-                
-            for line in lines:
-                line = line.replace('**', '')
-                if line.startswith('- ') or line.startswith('* '):
-                    bullets.append(line[2:])
-                elif line:
-                    bullets.append(line)
-                    
-            # Layout Titre + Contenu
-            slide_layout = prs.slide_layouts[1]
-            slide = prs.slides.add_slide(slide_layout)
-            title_shape = slide.shapes.title
-            body_shape = slide.placeholders[1]
-            
-            title_shape.text = title
-            tf = body_shape.text_frame
-            for i, bullet in enumerate(bullets):
-                if i == 0:
-                    tf.text = bullet
-                else:
-                    p = tf.add_paragraph()
-                    p.text = bullet
-                    p.level = 0
-        buf = io.BytesIO()
-        prs.save(buf)
-        buf.seek(0)
-        return send_file(buf, mimetype='application/vnd.openxmlformats-officedocument.presentationml.presentation',
-                         as_attachment=True, download_name=f"{filename_base}.pptx")
 
     elif fmt == 'pdf':
         from reportlab.lib.pagesizes import A4

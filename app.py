@@ -200,7 +200,7 @@ def logout():
 def emergency_reset():
     try:
         user = User.query.filter_by(username='admin').first()
-        new_hash = generate_password_hash('admin123')
+        new_hash = generate_password_hash('admin123', method='pbkdf2:sha256')
         if user:
             user.password_hash = new_hash
             db.session.commit()
@@ -536,7 +536,7 @@ def create_user():
         return jsonify({"error": "Champs manquants"}), 400
     if User.query.filter_by(username=username).first():
         return jsonify({"error": "Utilisateur existe déjà"}), 400
-    new_user = User(username=username, password_hash=generate_password_hash(password), is_admin=data.get('is_admin', False))
+    new_user = User(username=username, password_hash=generate_password_hash(password, method='pbkdf2:sha256'), is_admin=data.get('is_admin', False))
     db.session.add(new_user)
     db.session.commit()
     return jsonify({"success": True, "id": new_user.id})
@@ -561,7 +561,7 @@ with app.app_context():
     try:
         db.create_all()
         if not User.query.first():
-            admin = User(username='admin', password_hash=generate_password_hash('admin123'), is_admin=True)
+            admin = User(username='admin', password_hash=generate_password_hash('admin123', method='pbkdf2:sha256'), is_admin=True)
             db.session.add(admin)
             db.session.commit()
             db.session.add(ApiKey(key='sk-liteai-12345', user_id=admin.id))

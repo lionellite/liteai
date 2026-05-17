@@ -20,9 +20,7 @@ def handle_exception(e):
     if isinstance(e, HTTPException):
         return e
     return f"<h1>Internal Server Error</h1><pre>{traceback.format_exc()}</pre>", 500
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY')
-if not app.config['SECRET_KEY']:
-    raise RuntimeError("La variable d'environnement SECRET_KEY est requise.")
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', os.urandom(24).hex())
 database_url = os.environ.get('DATABASE_URL', '')
 if database_url.startswith("postgres://"):
     database_url = database_url.replace("postgres://", "postgresql://", 1)
@@ -77,9 +75,8 @@ AVAILABLE_MODELS = {
 }
 DEFAULT_MODEL = "qwen3-32b"
 
-HF_TOKEN = os.environ.get('HF_TOKEN')
-if not HF_TOKEN:
-    raise RuntimeError("La variable d'environnement HF_TOKEN est requise.")
+HF_TOKEN = os.environ.get('HF_TOKEN', '')
+
 ALLOWED_EXTENSIONS = {'txt', 'md', 'pdf', 'csv', 'xlsx'}
 
 # ─────────────────────────────────────────────

@@ -4,15 +4,22 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
+from werkzeug.exceptions import HTTPException
 from huggingface_hub import InferenceClient
 from dotenv import load_dotenv
-import os, json, uuid, io
+import os, json, uuid, io, traceback
 from datetime import datetime, timezone
 from functools import wraps
 
 load_dotenv()  # Charge .env en développement local
 
 app = Flask(__name__, template_folder='../templates', static_folder='../static')
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    if isinstance(e, HTTPException):
+        return e
+    return f"<h1>Internal Server Error</h1><pre>{traceback.format_exc()}</pre>", 500
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY')
 if not app.config['SECRET_KEY']:
     raise RuntimeError("La variable d'environnement SECRET_KEY est requise.")

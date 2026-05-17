@@ -108,6 +108,7 @@ function renderMessage(role, content, animate = true) {
                         <button class="export-btn" onclick="exportMsg(this, 'md')">MD</button>
                         <button class="export-btn" onclick="exportMsg(this, 'docx')">DOCX</button>
                         <button class="export-btn" onclick="exportMsg(this, 'xlsx')">XLSX</button>
+                        <button class="export-btn" onclick="exportMsg(this, 'pptx')">PPTX</button>
                         <button class="export-btn" onclick="exportMsg(this, 'pdf')">PDF</button>
                     </div>
                 </div>` : ''}

@@ -7,7 +7,7 @@ from werkzeug.utils import secure_filename
 from werkzeug.exceptions import HTTPException
 from huggingface_hub import InferenceClient
 from dotenv import load_dotenv
-import os, json, uuid, io, traceback
+import os, json, uuid, io, traceback, re
 from datetime import datetime, timezone
 from functools import wraps
 
@@ -523,9 +523,28 @@ def export_file(fmt):
 
     elif fmt == 'docx':
         from docx import Document
+        from docx.shared import Pt
         doc = Document()
+        # Parse basic markdown for better design
         for line in content.split('\n'):
-            doc.add_paragraph(line)
+            line = line.strip()
+            if not line:
+                continue
+            if line.startswith('# '):
+                doc.add_heading(line[2:].replace('**', ''), level=1)
+            elif line.startswith('## '):
+                doc.add_heading(line[3:].replace('**', ''), level=2)
+            elif line.startswith('### '):
+                doc.add_heading(line[4:].replace('**', ''), level=3)
+            elif line.startswith('- ') or line.startswith('* '):
+                doc.add_paragraph(line[2:].replace('**', ''), style='List Bullet')
+            else:
+                p = doc.add_paragraph()
+                parts = line.split('**')
+                for i, part in enumerate(parts):
+                    run = p.add_run(part)
+                    if i % 2 != 0:
+                        run.bold = True
         buf = io.BytesIO()
         doc.save(buf)
         buf.seek(0)
@@ -534,27 +553,113 @@ def export_file(fmt):
 
     elif fmt == 'xlsx':
         import pandas as pd
-        lines = [{'Contenu': line} for line in content.split('\n')]
-        df = pd.DataFrame(lines)
+        # Détection de tableaux markdown
+        table_lines = [line.strip() for line in content.split('\n') if line.strip().startswith('|') and line.strip().endswith('|')]
+        
+        if table_lines and len(table_lines) > 2:
+            headers = [c.strip() for c in table_lines[0].strip('|').split('|')]
+            data = []
+            for line in table_lines[2:]:
+                row = [c.strip() for c in line.strip('|').split('|')]
+                data.append(row)
+            # Normaliser la taille des lignes
+            for row in data:
+                while len(row) < len(headers): row.append("")
+                if len(row) > len(headers): del row[len(headers):]
+            df = pd.DataFrame(data, columns=headers)
+        else:
+            # Fallback s'il n'y a pas de tableau explicite
+            lines = [{'Contenu': line} for line in content.split('\n')]
+            df = pd.DataFrame(lines)
+
         buf = io.BytesIO()
-        df.to_excel(buf, index=False)
+        with pd.ExcelWriter(buf, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False)
+            worksheet = writer.sheets['Sheet1']
+            for col in worksheet.columns:
+                max_length = 0
+                column = col[0].column_letter
+                for cell in col:
+                    try:
+                        if len(str(cell.value)) > max_length: max_length = len(cell.value)
+                    except: pass
+                worksheet.column_dimensions[column].width = min((max_length + 2), 50)
         buf.seek(0)
         return send_file(buf, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                          as_attachment=True, download_name=f"{filename_base}.xlsx")
 
+    elif fmt == 'pptx':
+        from pptx import Presentation
+        prs = Presentation()
+        # Séparer par "---" (format standard de slide markdown) ou par titres "##"
+        sections = re.split(r'\n---\n', content)
+        if len(sections) == 1:
+            parts = re.split(r'\n##\s+', '\n' + content)
+            sections = ["## " + p for p in parts[1:]] if len(parts) > 1 else [content]
+        
+        for section in sections:
+            lines = [l.strip() for l in section.split('\n') if l.strip()]
+            if not lines: continue
+            
+            title = "Diapositive"
+            bullets = []
+            
+            if lines[0].startswith('# '):
+                title = lines[0][2:].replace('**', '')
+                lines = lines[1:]
+            elif lines[0].startswith('## '):
+                title = lines[0][3:].replace('**', '')
+                lines = lines[1:]
+                
+            for line in lines:
+                line = line.replace('**', '')
+                if line.startswith('- ') or line.startswith('* '):
+                    bullets.append(line[2:])
+                elif line:
+                    bullets.append(line)
+                    
+            # Layout Titre + Contenu
+            slide_layout = prs.slide_layouts[1]
+            slide = prs.slides.add_slide(slide_layout)
+            title_shape = slide.shapes.title
+            body_shape = slide.placeholders[1]
+            
+            title_shape.text = title
+            tf = body_shape.text_frame
+            for i, bullet in enumerate(bullets):
+                if i == 0:
+                    tf.text = bullet
+                else:
+                    p = tf.add_paragraph()
+                    p.text = bullet
+                    p.level = 0
+        buf = io.BytesIO()
+        prs.save(buf)
+        buf.seek(0)
+        return send_file(buf, mimetype='application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                         as_attachment=True, download_name=f"{filename_base}.pptx")
+
     elif fmt == 'pdf':
         from reportlab.lib.pagesizes import A4
-        from reportlab.platypus import SimpleDocTemplate, Paragraph
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
         from reportlab.lib.styles import getSampleStyleSheet
         buf = io.BytesIO()
         doc = SimpleDocTemplate(buf, pagesize=A4)
         styles = getSampleStyleSheet()
-        story = [Paragraph(line.replace('\n', '<br/>'), styles['Normal']) for line in content.split('\n') if line]
+        story = []
+        for line in content.split('\n'):
+            if line.startswith('# '):
+                story.append(Paragraph(line[2:].replace('**', ''), styles['Heading1']))
+            elif line.startswith('## '):
+                story.append(Paragraph(line[3:].replace('**', ''), styles['Heading2']))
+            elif line:
+                story.append(Paragraph(line.replace('**', ''), styles['Normal']))
+            story.append(Spacer(1, 5))
         doc.build(story)
         buf.seek(0)
         return send_file(buf, mimetype='application/pdf', as_attachment=True, download_name=f"{filename_base}.pdf")
 
-    return jsonify({"error": f"Format '{fmt}' non supporté. Acceptés: txt, md, docx, xlsx, pdf"}), 400
+    return jsonify({"error": f"Format '{fmt}' non supporté. Acceptés: txt, md, docx, xlsx, pptx, pdf"}), 400
 
 # ─────────────────────────────────────────────
 #  ROUTES SESSIONS & ADMIN

@@ -1,12 +1,15 @@
 # 📚 Documentation LiteAI
 
-Bienvenue dans la documentation officielle de **LiteAI**, une solution légère et puissante pour exposer l'intelligence artificielle (Qwen 32B via Hugging Face) sous forme d'API polyvalente.
+Bienvenue dans la documentation officielle de **LiteAI**, une solution moderne, performante et sécurisée pour exposer une suite de modèles d'intelligence artificielle de pointe via une interface web fluide et une API robuste.
+
+---
 
 ## 🚀 Installation & Lancement
 
 ### Prérequis
 - Python 3.8+
-- Un compte Hugging Face (pour changer la clé si besoin)
+- Base de données PostgreSQL (Supabase recommandée)
+- Un compte ou un token d'API Hugging Face (`HF_TOKEN`)
 
 ### Installation
 ```bash
@@ -17,23 +20,22 @@ pip install -r requirements.txt
 ```bash
 python app.py
 ```
-Le serveur sera disponible sur `http://127.0.0.1:5000`.
+Le serveur local sera disponible sur `http://127.0.0.1:5000`.
 
 ---
 
 ## 🔐 Authentification
 
-Toutes les requêtes vers l'API doivent être authentifiées. LiteAI supporte deux formats :
+Toutes les requêtes vers l'API doivent être authentifiées via l'une de ces méthodes :
 
-1.  **Format Standard** : Header `X-API-Key: sk-liteai-12345`
-2.  **Format OpenAI (Compatible CLI)** : Header `Authorization: Bearer sk-liteai-12345`
+1. **Format Standard LiteAI** : Header `X-API-Key: sk-liteai-12345`
+2. **Format OpenAI** : Header `Authorization: Bearer sk-liteai-12345`
 
 ---
 
 ## 📡 Endpoints API
 
 ### 🚀 Compatibilité OpenAI (CLI & Outils)
-Pour utiliser LiteAI avec des outils existants (comme des clients CLI ou des plugins IDE), utilisez cet endpoint :
 - **URL** : `/v1/chat/completions` (Alias vers `/api/chat`)
 
 ### 1. Chat (Standard)
@@ -46,23 +48,45 @@ Envoie une requête et attend la réponse complète de l'IA.
 {
   "message": "Bonjour, comment vas-tu ?",
   "session_id": "optional-uuid",
+  "model": "qwen3-32b",
   "temperature": 0.7,
-  "max_tokens": 1024
+  "max_tokens": 1024,
+  "web_search": false
 }
 ```
 
-### 2. Chat (Streaming)
+### 2. Chat (Streaming avec RAG & Vision)
 Reçoit la réponse en temps réel via Server-Sent Events (SSE).
 
 - **URL** : `/api/chat/stream`
 - **Méthode** : `POST`
-- **Format de sortie** : Flux de données `data: {"content": "..."}`
+- **Body (JSON)** :
+```json
+{
+  "message": "Décris cette image et cherche la date de cet événement sur le web",
+  "session_id": "optional-uuid",
+  "model": "kimi-k2",
+  "web_search": true,
+  "file_type": "image",
+  "fileContent": "data:image/png;base64,iVBORw0KGgoAAA..."
+}
+```
 
-### 3. Compatibilité Anthropic (Claude Code, etc.)
-**POST** `/v1/messages`
-LiteAI traduit automatiquement le format Anthropic vers le format Qwen.
+#### Événements SSE retournés :
+Le flux renvoie des blocs JSON avec des types de messages spécifiques :
+- **Status de recherche** : `data: {"type": "search_status", "status": "Recherche sur le web..."}`
+- **Résultats de recherche** : `data: {"type": "search_results", "sources": [{"title": "...", "url": "...", "body": "..."}]}`
+- **Contenu généré** : `data: {"content": "...", "session_id": "...", "model": "..."}`
+- **Fin du flux** : `[DONE]`
+
+---
+
+### 3. Compatibilité Anthropic
+Traduit automatiquement le format Anthropic vers le backend LiteAI.
+- **URL** : `/v1/messages`
+- **Méthode** : `POST`
 - **Headers** : `X-API-Key: <votre_cle>`
-- **Exemple de corps** :
+- **Body** :
 ```json
 {
   "model": "claude-3-5-sonnet-20240620",
@@ -74,69 +98,47 @@ LiteAI traduit automatiquement le format Anthropic vers le format Qwen.
 ---
 
 ### 4. Lister les modèles
-**GET** `/v1/models` ou `/api/models`
+- **URL** : `/v1/models` ou `/api/models`
+- **Méthode** : `GET`
 - **Headers** : `X-API-Key: <votre_cle>`
-- **Réponse** : Retourne les détails du modèle Qwen 32B actif.
 
 ---
 
-### 4. Gestion de l'Historique
-LiteAI gère automatiquement la mémoire de la conversation.
+### 5. Gestion de l'Historique
+LiteAI gère automatiquement la persistance des discussions en base de données.
 
 - **Récupérer l'historique** : `GET /api/history/<session_id>`
 - **Supprimer l'historique** : `DELETE /api/history/<session_id>`
 
 ---
 
-## 💻 Exemples d'Intégration
+## 🎨 Fonctionnalités de l'Interface Web (Kimi/Claude-like)
 
-### Python (Scripts & Agents)
-```python
-import requests
+### 🌐 Recherche Web en Temps Réel
+- Un bouton globe (🌐) dans la zone d'écriture active la recherche web en direct.
+- Il interroge DuckDuckGo, extrait les informations pertinentes et les injecte de manière invisible dans le contexte de l'IA pour garantir des réponses actualisées.
+- Les sources consultées s'affichent sous forme de "chips" interactifs cliquables au-dessus de la réponse.
 
-headers = {"X-API-Key": "sk-liteai-12345"}
-data = {"message": "Qui es-tu ?", "session_id": "user-123"}
+### 👁️ Capacités Visuelles (Multimodal)
+- Support de l'analyse d'images (`.png`, `.jpg`, `.jpeg`, `.webp`) par simple glisser-déposer ou sélection dans la zone d'écriture.
+- Fonctionnalité activée automatiquement sur les modèles compatibles vision (`kimi-k2`, `glm-5`). Un message d'avertissement s'affiche si vous tentez d'analyser une image avec un modèle textuel pur.
 
-response = requests.post("http://127.0.0.1:5000/api/chat", headers=headers, json=data)
-print(response.json()['response'])
-```
-
-### JavaScript (Web Apps)
-```javascript
-fetch('/api/chat', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    'X-API-Key': 'sk-liteai-12345'
-  },
-  body: JSON.stringify({ message: "Hello" })
-});
-```
+### 📄 Générateur de Documents (Client-Side)
+L'exportation de documents s'effectue directement sur le navigateur (offloading serveur, vitesse instantanée) :
+- **DOCX (.doc)** : Génère un document structuré et stylisé avec un template HTML et CSS Office, parfaitement lisible sous MS Word.
+- **PPTX** : Génère une présentation de diapositives de façon dynamique grâce à `PptxGenJS` en analysant la structure du texte (titres et listes).
+- **XLSX** : Si l'IA produit un tableau Markdown, le système génère un tableur Excel soigné.
+- **PDF, MD, TXT** : Formats classiques d'exports rapides.
 
 ---
 
-## ⚙️ Configuration Avancée
-Dans `app.py`, vous pouvez modifier les variables suivantes :
-- `MODEL_ID` : Changer le modèle Hugging Face.
-- `API_KEYS` : Ajouter ou supprimer des clés d'accès.
-- `chat_sessions` : Par défaut en mémoire. À migrer vers Redis pour la production.
+## ⚙️ Configuration & Variables d'Environnement
+
+Dans votre fichier `.env` ou sur votre dashboard Vercel :
+- `DATABASE_URL` : Chaîne de connexion PostgreSQL.
+- `HF_TOKEN` : Jeton Hugging Face pour l'accès aux APIs d'inférence.
+- `SECRET_KEY` : Clé de sécurisation des sessions Flask.
 
 ---
 
-## 🎨 Interface & UX Avancée
-L'interface LiteAI inclut des fonctionnalités modernes pour une meilleure expérience :
-- **Blocs de Réflexion (`<think>`)** : Les pensées internes de l'IA sont automatiquement isolées dans des blocs stylisés.
-- **Markdown & Code** : Rendu complet du Markdown avec coloration syntaxique (`Highlight.js`).
-- **Copie Facile** : Bouton "Copier" automatique sur tous les blocs de code.
-
----
-
-## 🛠️ Gestion des Clés (Admin)
-Une interface visuelle est disponible sur `/admin/keys` pour :
-- Lister les clés actives.
-- Générer de nouvelles clés sécurisées.
-- Révoquer l'accès d'une clé existante.
-
----
-
-*Documentation générée par LiteAI.*
+*Documentation mise à jour pour la version Multimodale de LiteAI.*

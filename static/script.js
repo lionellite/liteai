@@ -3,6 +3,7 @@ let currentSessionId = null;
 let currentModel = DEFAULT_MODEL;
 let pendingFileContent = null;
 let pendingFileName = null;
+let pendingFileType = null;
 let isStreaming = false;
 
 const chatMessages = document.getElementById('chat-messages');
@@ -115,7 +116,7 @@ function renderMessage(role, content, animate = true) {
 
     const contentEl = row.querySelector('.msg-content');
     if (isUser) {
-        contentEl.textContent = content;
+        contentEl.innerHTML = content;
     } else {
         contentEl.innerHTML = formatAIContent(content);
         addCopyButtons(contentEl);
@@ -170,10 +171,16 @@ async function onFileSelected(input) {
         if (data.error) { alert(data.error); return; }
         pendingFileContent = data.content;
         pendingFileName = data.filename;
+        pendingFileType = data.type;
         document.getElementById('file-preview').style.display = 'block';
-        document.getElementById('file-name-display').textContent = `${data.filename} (${(data.chars / 1000).toFixed(1)}k chars)`;
-        const ext = data.filename.split('.').pop().toLowerCase();
-        document.getElementById('file-icon').textContent = ext === 'pdf' ? '📄' : ext === 'csv' || ext === 'xlsx' ? '📊' : '📝';
+        if (data.type === 'image') {
+            document.getElementById('file-name-display').textContent = data.filename;
+            document.getElementById('file-icon').innerHTML = `<img src="${data.content}" style="width: 24px; height: 24px; object-fit: cover; border-radius: 4px;">`;
+        } else {
+            document.getElementById('file-name-display').textContent = `${data.filename} (${(data.chars / 1000).toFixed(1)}k chars)`;
+            const ext = data.filename.split('.').pop().toLowerCase();
+            document.getElementById('file-icon').textContent = ext === 'pdf' ? '📄' : ext === 'csv' || ext === 'xlsx' ? '📊' : '📝';
+        }
     } catch (e) { alert('Erreur upload: ' + e.message); }
     input.value = '';
 }
@@ -181,6 +188,7 @@ async function onFileSelected(input) {
 function clearFile() {
     pendingFileContent = null;
     pendingFileName = null;
+    pendingFileType = null;
     document.getElementById('file-preview').style.display = 'none';
 }
 
@@ -191,13 +199,23 @@ async function handleSend() {
     if (!text && !pendingFileContent) return;
 
     let message = text;
+    let payloadFileType = null;
+    let payloadFileContent = null;
+
     if (pendingFileContent) {
-        const prefix = `[Fichier: ${pendingFileName}]\n\`\`\`\n${pendingFileContent}\n\`\`\`\n\n`;
-        message = prefix + (text || 'Analyse ce fichier et résume son contenu.');
-        renderMessage('user', `📎 ${pendingFileName}${text ? '\n' + text : ''}`);
+        if (pendingFileType === 'image') {
+            message = text || 'Décris cette image.';
+            payloadFileType = 'image';
+            payloadFileContent = pendingFileContent;
+            renderMessage('user', `<img src="${pendingFileContent}" style="max-width: 250px; border-radius: 8px; margin-bottom: 8px; display: block;"><br>${escapeHtml(message)}`);
+        } else {
+            const prefix = `[Fichier: ${pendingFileName}]\n\`\`\`\n${pendingFileContent}\n\`\`\`\n\n`;
+            message = prefix + (text || 'Analyse ce fichier et résume son contenu.');
+            renderMessage('user', `📎 ${escapeHtml(pendingFileName)}${text ? '<br>' + escapeHtml(text) : ''}`);
+        }
         clearFile();
     } else {
-        renderMessage('user', text);
+        renderMessage('user', escapeHtml(text));
     }
     userInput.value = '';
     userInput.style.height = 'auto';
@@ -212,7 +230,13 @@ async function handleSend() {
         const res = await fetch('/api/chat/stream', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
-            body: JSON.stringify({ message, session_id: currentSessionId, model: currentModel })
+            body: JSON.stringify({ 
+                message: message, 
+                session_id: currentSessionId, 
+                model: currentModel,
+                file_type: payloadFileType,
+                fileContent: payloadFileContent
+            })
         });
         const reader = res.body.getReader();
         const decoder = new TextDecoder();

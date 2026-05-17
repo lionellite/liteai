@@ -42,43 +42,88 @@ AVAILABLE_MODELS = {
         "id": "Qwen/Qwen3-32B",
         "name": "Qwen3 32B",
         "provider": "novita",
-        "description": "Modèle général très puissant, excellent pour la rédaction et le code.",
-        "context": "32K tokens"
+        "description": "Modèle général très puissant, excellent pour la rédaction.",
+        "context": "32K tokens",
+        "vision": False
+    },
+    "deepseek-v4-pro": {
+        "id": "deepseek-ai/DeepSeek-V4-Pro",
+        "name": "DeepSeek V4 Pro",
+        "provider": "novita",
+        "description": "Raisonnement de pointe et logique complexe.",
+        "context": "128K tokens",
+        "vision": False
+    },
+    "deepseek-v4-flash": {
+        "id": "deepseek-ai/DeepSeek-V4-Flash",
+        "name": "DeepSeek V4 Flash",
+        "provider": "novita",
+        "description": "Modèle ultra rapide de DeepSeek.",
+        "context": "128K tokens",
+        "vision": False
+    },
+    "kimi-k2.6": {
+        "id": "moonshotai/Kimi-K2.6",
+        "name": "Kimi K2.6",
+        "provider": "novita",
+        "description": "Excellent modèle conversationnel et analytique.",
+        "context": "262K tokens",
+        "vision": False
+    },
+    "glm-5.1": {
+        "id": "zai-org/GLM-5.1",
+        "name": "GLM 5.1",
+        "provider": "novita",
+        "description": "Modèle général très polyvalent.",
+        "context": "202K tokens",
+        "vision": False
     },
     "llama3-70b": {
         "id": "meta-llama/Llama-3.3-70B-Instruct",
         "name": "Llama 3.3 70B",
         "provider": "novita",
         "description": "Excellent pour le code et le raisonnement complexe.",
-        "context": "128K tokens"
+        "context": "131K tokens",
+        "vision": False
     },
-    "deepseek-r1": {
-        "id": "deepseek-ai/DeepSeek-R1",
-        "name": "DeepSeek R1",
+    "gpt-oss-120b": {
+        "id": "openai/gpt-oss-120b",
+        "name": "GPT-OSS 120B",
         "provider": "novita",
-        "description": "Spécialisé en raisonnement logique et mathématiques.",
-        "context": "64K tokens"
+        "description": "Open Source State of the Art par OpenAI.",
+        "context": "131K tokens",
+        "vision": False
     },
-    "mistral-7b": {
-        "id": "mistralai/Mistral-7B-Instruct-v0.3",
-        "name": "Mistral 7B",
-        "provider": "hf-inference",
-        "description": "Léger, rapide, idéal pour les tâches simples.",
-        "context": "8K tokens"
-    },
-    "qwen-coder": {
-        "id": "Qwen/Qwen2.5-Coder-32B-Instruct",
-        "name": "Qwen2.5 Coder 32B",
+    "qwen3-coder-next": {
+        "id": "Qwen/Qwen3-Coder-Next",
+        "name": "Qwen3 Coder Next",
         "provider": "novita",
-        "description": "Spécialisé code — le meilleur pour la programmation.",
-        "context": "32K tokens"
+        "description": "Le meilleur modèle mondial pour la programmation.",
+        "context": "262K tokens",
+        "vision": False
     },
+    "qwen3-vl": {
+        "id": "Qwen/Qwen3-VL-8B-Instruct",
+        "name": "Qwen3 VL (Vision)",
+        "provider": "novita",
+        "description": "Modèle multimodal pour analyser des images.",
+        "context": "131K tokens",
+        "vision": True
+    },
+    "deepseek-ocr": {
+        "id": "deepseek-ai/DeepSeek-OCR",
+        "name": "DeepSeek OCR",
+        "provider": "novita",
+        "description": "Extraction experte de textes depuis des images.",
+        "context": "8K tokens",
+        "vision": True
+    }
 }
-DEFAULT_MODEL = "qwen3-32b"
+DEFAULT_MODEL = "deepseek-v4-pro"
 
 HF_TOKEN = os.environ.get('HF_TOKEN', '')
 
-ALLOWED_EXTENSIONS = {'txt', 'md', 'pdf', 'csv', 'xlsx'}
+ALLOWED_EXTENSIONS = {'txt', 'md', 'pdf', 'csv', 'xlsx', 'png', 'jpg', 'jpeg', 'webp'}
 
 # ─────────────────────────────────────────────
 #  MODÈLES DE DONNÉES
@@ -170,9 +215,14 @@ def extract_file_content(file_storage):
             import pandas as pd
             df = pd.read_excel(file_storage)
             content = df.to_string()
+        elif ext in ('png', 'jpg', 'jpeg', 'webp'):
+            import base64
+            b64_str = base64.b64encode(file_storage.read()).decode('utf-8')
+            content = f"data:image/{ext};base64,{b64_str}"
+            return filename, content, "image"
     except Exception as e:
         content = f"[Erreur extraction: {e}]"
-    return filename, content[:15000]  # Limiter à 15K chars
+    return filename, content[:15000], "text"
 
 # ─────────────────────────────────────────────
 #  ROUTES UI
@@ -255,13 +305,33 @@ def chat():
     sess = db.session.get(ChatSession, session_id)
     history = [{"role": m.role, "content": m.content} for m in sess.messages]
     user_content = data.get('message') or (data.get('messages') or [{}])[-1].get('content', '')
+    file_type = data.get('file_type')
+    file_content = data.get('fileContent')
+
+    if file_type == 'image' and file_content and not AVAILABLE_MODELS.get(model_key, {}).get("vision"):
+        return jsonify({"error": "Erreur: Ce modèle ne supporte pas la vision. Choisissez un modèle Vision."}), 400
+
     db.session.add(Message(session_id=session_id, role='user', content=user_content))
+    db.session.commit()
 
     try:
         ai_client, model_id = get_client(model_key)
+        
+        messages_payload = history.copy()
+        if file_type == 'image' and file_content:
+            messages_payload.append({
+                "role": "user", 
+                "content": [
+                    {"type": "text", "text": user_content},
+                    {"type": "image_url", "image_url": {"url": file_content}}
+                ]
+            })
+        else:
+            messages_payload.append({"role": "user", "content": user_content})
+
         response = ai_client.chat.completions.create(
             model=model_id,
-            messages=history + [{"role": "user", "content": user_content}],
+            messages=messages_payload,
             max_tokens=data.get('max_tokens', 2048),
             temperature=data.get('temperature', 0.7)
         )
@@ -290,17 +360,36 @@ def chat_stream():
     sess = db.session.get(ChatSession, session_id)
     history = [{"role": m.role, "content": m.content} for m in sess.messages]
     user_content = data.get('message') or (data.get('messages') or [{}])[-1].get('content', '')
-
-    db.session.add(Message(session_id=session_id, role='user', content=user_content))
-    db.session.commit()
+    file_type = data.get('file_type')
+    file_content = data.get('fileContent')
 
     def generate():
+        if file_type == 'image' and file_content and not AVAILABLE_MODELS.get(model_key, {}).get("vision"):
+            yield f"data: {json.dumps({'error': 'Erreur: Ce modèle ne supporte pas la vision. Choisissez un modèle Vision.'})}\n\n"
+            return
+
+        db.session.add(Message(session_id=session_id, role='user', content=user_content))
+        db.session.commit()
+
         full_ai = ""
         try:
             ai_client, model_id = get_client(model_key)
+            
+            messages_payload = history.copy()
+            if file_type == 'image' and file_content:
+                messages_payload.append({
+                    "role": "user", 
+                    "content": [
+                        {"type": "text", "text": user_content},
+                        {"type": "image_url", "image_url": {"url": file_content}}
+                    ]
+                })
+            else:
+                messages_payload.append({"role": "user", "content": user_content})
+
             stream = ai_client.chat.completions.create(
                 model=model_id,
-                messages=history + [{"role": "user", "content": user_content}],
+                messages=messages_payload,
                 max_tokens=data.get('max_tokens', 2048),
                 temperature=data.get('temperature', 0.7),
                 stream=True
@@ -412,10 +501,10 @@ def upload_file():
     f = request.files['file']
     if not f or not allowed_file(f.filename):
         return jsonify({"error": f"Format non supporté. Acceptés: {', '.join(ALLOWED_EXTENSIONS)}"}), 400
-    filename, content = extract_file_content(f)
+    filename, content, file_type = extract_file_content(f)
     if not content.strip():
         return jsonify({"error": "Impossible d'extraire le contenu du fichier"}), 422
-    return jsonify({"filename": filename, "content": content, "chars": len(content)})
+    return jsonify({"filename": filename, "content": content, "type": file_type, "chars": len(content) if file_type == "text" else 0})
 
 @app.route('/api/export/<fmt>', methods=['POST'])
 @require_api_key

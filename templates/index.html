@@ -82,7 +82,10 @@
                 <button class="attach-btn" onclick="document.getElementById('file-input').click()" title="Joindre un fichier">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
                 </button>
-                <input type="file" id="file-input" accept=".txt,.md,.pdf,.csv,.xlsx" style="display:none;" onchange="onFileSelected(this)">
+                <input type="file" id="file-input" accept=".txt,.md,.pdf,.csv,.xlsx,.png,.jpg,.jpeg,.webp" style="display:none;" onchange="onFileSelected(this)">
+                <button class="attach-btn web-search-btn" id="web-search-btn" onclick="toggleWebSearch()" title="Recherche Web" style="margin-left: 4px;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                </button>
                 <textarea id="user-input" placeholder="Envoyer un message…" rows="1"></textarea>
                 <button class="send-btn" id="send-btn" onclick="handleSend()">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>

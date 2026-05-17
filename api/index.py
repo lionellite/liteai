@@ -34,6 +34,20 @@ db = SQLAlchemy(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
+def perform_web_search(query):
+    try:
+        from duckduckgo_search import DDGS
+        results = DDGS().text(query, max_results=3)
+        if not results:
+            return ""
+        context = "Voici des informations récentes trouvées sur le web pour répondre à la question :\n\n"
+        for i, res in enumerate(results):
+            context += f"Source {i+1} ({res.get('title', 'Sans titre')}):\n{res.get('body', '')}\n\n"
+        return context
+    except Exception as e:
+        print(f"Erreur recherche web: {e}")
+        return ""
+
 # ─────────────────────────────────────────────
 #  MODÈLES DISPONIBLES
 # ─────────────────────────────────────────────
@@ -362,6 +376,7 @@ def chat_stream():
     user_content = data.get('message') or (data.get('messages') or [{}])[-1].get('content', '')
     file_type = data.get('file_type')
     file_content = data.get('fileContent')
+    web_search = data.get('web_search', False)
 
     def generate():
         if file_type == 'image' and file_content and not AVAILABLE_MODELS.get(model_key, {}).get("vision"):
@@ -371,21 +386,32 @@ def chat_stream():
         db.session.add(Message(session_id=session_id, role='user', content=user_content))
         db.session.commit()
 
+        search_context = ""
+        if web_search:
+            yield f"data: {json.dumps({'content': '*(Recherche web en cours...)*\\n', 'session_id': session_id, 'model': model_key})}\n\n"
+            search_context = perform_web_search(user_content)
+            if search_context:
+                yield f"data: {json.dumps({'content': '*(Résultats trouvés, analyse en cours...)*\\n\\n', 'session_id': session_id, 'model': model_key})}\n\n"
+
         full_ai = ""
         try:
             ai_client, model_id = get_client(model_key)
             
             messages_payload = history.copy()
+            final_user_content = user_content
+            if search_context:
+                final_user_content = f"{search_context}\n\nUtilise ces informations pour répondre à la question suivante : {user_content}"
+
             if file_type == 'image' and file_content:
                 messages_payload.append({
                     "role": "user", 
                     "content": [
-                        {"type": "text", "text": user_content},
+                        {"type": "text", "text": final_user_content},
                         {"type": "image_url", "image_url": {"url": file_content}}
                     ]
                 })
             else:
-                messages_payload.append({"role": "user", "content": user_content})
+                messages_payload.append({"role": "user", "content": final_user_content})
 
             stream = ai_client.chat.completions.create(
                 model=model_id,

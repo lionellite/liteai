@@ -12,3 +12,4 @@ openpyxl
 python-docx
 reportlab
 python-pptx
+duckduckgo-search

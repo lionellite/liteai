@@ -5,6 +5,7 @@ let pendingFileContent = null;
 let pendingFileName = null;
 let pendingFileType = null;
 let isStreaming = false;
+let webSearchEnabled = false;
 
 const chatMessages = document.getElementById('chat-messages');
 const userInput = document.getElementById('user-input');
@@ -193,6 +194,17 @@ function clearFile() {
     document.getElementById('file-preview').style.display = 'none';
 }
 
+// ─── Web Search ───
+function toggleWebSearch() {
+    webSearchEnabled = !webSearchEnabled;
+    const btn = document.getElementById('web-search-btn');
+    if (webSearchEnabled) {
+        btn.classList.add('active');
+    } else {
+        btn.classList.remove('active');
+    }
+}
+
 // ─── Send Message ───
 async function handleSend() {
     if (isStreaming) return;
@@ -236,7 +248,8 @@ async function handleSend() {
                 session_id: currentSessionId, 
                 model: currentModel,
                 file_type: payloadFileType,
-                fileContent: payloadFileContent
+                fileContent: payloadFileContent,
+                web_search: webSearchEnabled
             })
         });
         const reader = res.body.getReader();

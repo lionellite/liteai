@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Administration — LiteAI</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@700&family=Fira+Code&display=swap" rel="stylesheet">
+</head>
+<body class="admin-body" style="background: #0e0e10; color: #e8e8ed;">
+    <div class="admin-wrap">
+        <div class="admin-header">
+            <a href="/" style="font-size:0.8rem; color:#8e8e99; text-decoration:none;">← Retour au chat</a>
+            <h1 style="margin-top:1rem;">Lite<span>AI</span> <span style="color:#8e8e99; font-size:1rem; font-weight:400;">/ Administration</span></h1>
+        </div>
+
+        <!-- Stats -->
+        <div class="stats-row" id="stats-row">
+            <div class="stat-card"><div class="stat-val" id="s-users">…</div><div class="stat-lbl">Utilisateurs</div></div>
+            <div class="stat-card"><div class="stat-val" id="s-keys">…</div><div class="stat-lbl">Clés API</div></div>
+            <div class="stat-card"><div class="stat-val" id="s-sess">…</div><div class="stat-lbl">Sessions</div></div>
+            <div class="stat-card"><div class="stat-val" id="s-msgs">…</div><div class="stat-lbl">Messages</div></div>
+            <div class="stat-card"><div class="stat-val" id="s-reqs">…</div><div class="stat-lbl">Requêtes API</div></div>
+        </div>
+
+        <!-- Users -->
+        <div class="admin-section">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.25rem;">
+                <h2 style="margin:0;">👥 Utilisateurs</h2>
+                <button class="btn-sm btn-primary" onclick="showCreateUser()">+ Créer</button>
+            </div>
+            <table>
+                <thead><tr><th>Nom</th><th>Rôle</th><th>Clés</th><th>Actions</th></tr></thead>
+                <tbody>
+                    {% for user in users %}
+                    <tr>
+                        <td style="font-weight:500;">{{ user.username }}</td>
+                        <td>{% if user.is_admin %}<span class="count-badge">Admin</span>{% else %}Utilisateur{% endif %}</td>
+                        <td><span class="count-badge">{{ user.api_keys|length }}</span></td>
+                        <td>
+                            <button class="btn-sm" onclick="generateKeyForUser({{ user.id }})">+ Clé</button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- API Keys -->
+        <div class="admin-section">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.25rem;">
+                <h2 style="margin:0;">🔑 Clés API & Statistiques</h2>
+                <button class="btn-sm btn-primary" onclick="generateKey()">+ Générer</button>
+            </div>
+            <table>
+                <thead><tr><th>Clé</th><th>Propriétaire</th><th>Utilisations</th><th>Dernière activité</th><th>Créée le</th><th>Actions</th></tr></thead>
+                <tbody>
+                    {% for key in keys %}
+                    <tr id="row-{{ loop.index }}">
+                        <td><code class="key-text">{{ key.key }}</code></td>
+                        <td>{{ key.owner.username if key.owner else '—' }}</td>
+                        <td><span class="count-badge">{{ key.usage_count }}</span></td>
+                        <td style="font-size:0.8rem; color:#8e8e99;">{{ key.last_used.strftime('%d/%m/%Y %H:%M') if key.last_used else 'Jamais' }}</td>
+                        <td style="font-size:0.8rem; color:#8e8e99;">{{ key.created_at.strftime('%d/%m/%Y') if key.created_at else '—' }}</td>
+                        <td><button class="btn-sm danger" onclick="revokeKey('{{ key.key }}', this)">Révoquer</button></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Models Info -->
+        <div class="admin-section">
+            <h2>🧠 Modèles disponibles</h2>
+            <table>
+                <thead><tr><th>Clé</th><th>Modèle</th><th>Provider</th><th>Contexte</th></tr></thead>
+                <tbody>
+                    {% for key, m in models.items() %}
+                    <tr>
+                        <td><code class="key-text">{{ key }}</code></td>
+                        <td style="font-weight:500;">{{ m.name }}</td>
+                        <td style="color:#8e8e99;">{{ m.provider }}</td>
+                        <td>{{ m.context }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+    // Load stats
+    fetch('/api/admin/stats').then(r => r.json()).then(d => {
+        document.getElementById('s-users').textContent = d.total_users;
+        document.getElementById('s-keys').textContent = d.total_keys;
+        document.getElementById('s-sess').textContent = d.total_sessions;
+        document.getElementById('s-msgs').textContent = d.total_messages;
+        document.getElementById('s-reqs').textContent = d.total_requests;
+    });
+
+    async function generateKey() {
+        const r = await fetch('/api/admin/keys', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({}) });
+        const d = await r.json();
+        if (d.success) { alert(`Nouvelle clé : ${d.key}`); location.reload(); }
+    }
+
+    async function generateKeyForUser(userId) {
+        const r = await fetch('/api/admin/keys', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({user_id: userId}) });
+        const d = await r.json();
+        if (d.success) { alert(`Clé pour l'utilisateur : ${d.key}`); location.reload(); }
+    }
+
+    async function revokeKey(key, btn) {
+        if (!confirm('Révoquer cette clé ?')) return;
+        const r = await fetch(`/api/admin/keys/${key}`, { method: 'DELETE' });
+        if ((await r.json()).success) btn.closest('tr').remove();
+    }
+
+    async function showCreateUser() {
+        const username = prompt("Nom d'utilisateur :");
+        if (!username) return;
+        const password = prompt("Mot de passe :");
+        if (!password) return;
+        const isAdmin = confirm("Accès admin ?");
+        const r = await fetch('/api/admin/users', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ username, password, is_admin: isAdmin })
+        });
+        const d = await r.json();
+        if (d.success) { location.reload(); }
+        else alert(d.error || 'Erreur');
+    }
+    </script>
+</body>
+</html>

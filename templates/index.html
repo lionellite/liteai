@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LiteAI</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Outfit:wght@600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+</head>
+<body class="app-layout">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-top">
+            <div class="logo">Lite<span>AI</span></div>
+            <button class="new-chat-btn" onclick="startNewChat()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+                Nouvelle discussion
+            </button>
+        </div>
+
+        <div class="sessions-wrapper">
+            <p class="sessions-label">Récent</p>
+            <div class="sessions-list" id="sessions-list"></div>
+        </div>
+
+        <div class="sidebar-footer">
+            <div class="user-pill">
+                <div class="avatar">{{ current_user.username[0]|upper }}</div>
+                <span class="uname">{{ current_user.username }}</span>
+                {% if current_user.is_admin %}<a href="/admin/keys" class="badge-admin">Admin</a>{% endif %}
+            </div>
+            <a href="/docs" class="footer-link">Docs API</a>
+            <a href="/logout" class="footer-link logout">Déconnexion</a>
+        </div>
+    </aside>
+
+    <!-- MAIN -->
+    <main class="chat-main">
+        <!-- Header -->
+        <header class="chat-header">
+            <div class="model-selector-wrap">
+                <select id="model-select" onchange="onModelChange(this.value)">
+                    {% for key, m in models.items() %}
+                    <option value="{{ key }}" {% if key == default_model %}selected{% endif %}>{{ m.name }}</option>
+                    {% endfor %}
+                </select>
+                <span class="model-ctx" id="model-ctx"></span>
+            </div>
+        </header>
+
+        <!-- Messages -->
+        <div class="messages-area" id="chat-messages">
+            <div class="welcome" id="welcome-screen">
+                <div class="welcome-icon">✦</div>
+                <h2>Bonjour, <span>{{ current_user.username }}</span></h2>
+                <p>Comment puis-je vous aider aujourd'hui ?</p>
+                <div class="suggestion-chips">
+                    <button onclick="fillInput('Explique-moi les réseaux de neurones en termes simples')">💡 Concepts IA</button>
+                    <button onclick="fillInput('Écris un script Python pour lire un fichier CSV')">🐍 Code Python</button>
+                    <button onclick="fillInput('Rédige un email professionnel de relance client')">✉️ Rédaction</button>
+                    <button onclick="fillInput('Analyse et résume ce texte : ')">📄 Analyse</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Input Zone -->
+        <div class="input-zone">
+            <!-- File Preview -->
+            <div class="file-preview" id="file-preview" style="display:none;">
+                <div class="file-chip" id="file-chip">
+                    <span id="file-icon">📄</span>
+                    <span id="file-name-display"></span>
+                    <button onclick="clearFile()">✕</button>
+                </div>
+            </div>
+
+            <div class="input-box">
+                <button class="attach-btn" onclick="document.getElementById('file-input').click()" title="Joindre un fichier">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
+                </button>
+                <input type="file" id="file-input" accept=".txt,.md,.pdf,.csv,.xlsx" style="display:none;" onchange="onFileSelected(this)">
+                <textarea id="user-input" placeholder="Envoyer un message…" rows="1"></textarea>
+                <button class="send-btn" id="send-btn" onclick="handleSend()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                </button>
+            </div>
+            <p class="disclaimer">LiteAI · Qwen 32B · Les réponses peuvent être inexactes.</p>
+        </div>
+    </main>
+
+    <script>
+        // Données injectées depuis Flask
+        const MODELS = {{ models | tojson }};
+        const DEFAULT_MODEL = "{{ default_model }}";
+        const API_KEY = "sk-liteai-12345";
+    </script>
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

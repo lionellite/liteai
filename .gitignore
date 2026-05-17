@@ -1,0 +1,43 @@
+# ─── Python ───────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# ─── Environnement ────────────────────────
+.env
+.env.local
+.env.production
+venv/
+env/
+.venv/
+
+# ─── Base de données locale ───────────────
+instance/
+*.db
+*.sqlite
+*.sqlite3
+
+# ─── Fichiers uploadés (temporaires) ─────
+uploads/
+
+# ─── Vercel ──────────────────────────────
+.vercel
+
+# ─── IDE ──────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ─── OS ───────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ─── Fichier de clés mal nommé ────────────
+=0.28.0

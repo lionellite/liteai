@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Documentation API — LiteAI</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@700&family=Fira+Code&display=swap" rel="stylesheet">
+</head>
+<body class="docs-body" style="background:#0e0e10; color:#e8e8ed; font-family:'Inter',sans-serif;">
+    <div class="docs-wrap">
+        <div class="docs-header">
+            <a href="/" style="font-size:0.8rem; color:#8e8e99; text-decoration:none;">← Retour au chat</a>
+            <h1 style="margin-top:1rem; font-family:'Outfit',sans-serif; font-size:1.75rem;">Documentation <span style="color:#7c6af5;">API</span></h1>
+            <p style="color:#8e8e99; margin-top:0.5rem;">LiteAI est une API de chat IA universelle, compatible OpenAI et Anthropic.</p>
+        </div>
+
+        <!-- Auth -->
+        <div class="docs-section">
+            <h2>🔑 Authentification</h2>
+            <p style="color:#8e8e99; margin-bottom:1rem;">Toutes les routes API requièrent une clé valide via l'un de ces headers :</p>
+            <div class="endpoint">
+                <code style="font-family:'Fira Code'; color:#7c6af5;">X-API-Key: sk-liteai-xxxxx</code><br>
+                <code style="font-family:'Fira Code'; color:#7c6af5;">Authorization: Bearer sk-liteai-xxxxx</code>
+            </div>
+        </div>
+
+        <!-- Models -->
+        <div class="docs-section">
+            <h2>🧠 Modèles disponibles</h2>
+            {% for key, m in models.items() %}
+            <div class="model-card">
+                <div style="display:flex; justify-content:space-between;">
+                    <span class="model-name">{{ m.name }}</span>
+                    <span style="font-size:0.75rem; color:#8e8e99;">{{ m.context }}</span>
+                </div>
+                <div class="model-desc">{{ m.description }}</div>
+                <div class="model-meta">Clé : <code style="font-family:'Fira Code'; color:#7c6af5;">{{ key }}</code> · ID : <code style="font-family:'Fira Code'; color:#8e8e99; font-size:0.75rem;">{{ m.id }}</code></div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Endpoints -->
+        <div class="docs-section">
+            <h2>📡 Endpoints</h2>
+
+            <div class="endpoint">
+                <div class="endpoint-header">
+                    <span class="method-badge method-post">POST</span>
+                    <span class="endpoint-path">/api/chat</span>
+                    <span style="font-size:0.75rem; color:#8e8e99; margin-left:auto;">Chat complet (non-streaming)</span>
+                </div>
+                <pre style="background:#0d1117; border-radius:8px; padding:1rem; overflow-x:auto; margin:0; font-size:0.82rem;"><code style="font-family:'Fira Code';">{
+  "message": "Votre question",
+  "model": "qwen3-32b",        // optionnel
+  "session_id": "uuid",        // optionnel, pour continuer
+  "max_tokens": 2048,          // optionnel
+  "temperature": 0.7           // optionnel
+}</code></pre>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header">
+                    <span class="method-badge method-post">POST</span>
+                    <span class="endpoint-path">/api/chat/stream</span>
+                    <span style="font-size:0.75rem; color:#8e8e99; margin-left:auto;">Streaming SSE (temps réel)</span>
+                </div>
+                <p style="font-size:0.85rem; color:#8e8e99; margin:0.5rem 0 0;">Même format que /api/chat. Réponse en flux <code>data: {"content": "..."}</code></p>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header">
+                    <span class="method-badge method-post">POST</span>
+                    <span class="endpoint-path">/v1/chat/completions</span>
+                    <span style="font-size:0.75rem; color:#8e8e99; margin-left:auto;">Compatible OpenAI</span>
+                </div>
+                <pre style="background:#0d1117; border-radius:8px; padding:1rem; overflow-x:auto; margin:0.5rem 0 0; font-size:0.82rem;"><code style="font-family:'Fira Code';">{
+  "model": "Qwen/Qwen3-32B",   // ou la clé: "qwen3-32b"
+  "messages": [
+    {"role": "user", "content": "Bonjour"}
+  ]
+}</code></pre>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header">
+                    <span class="method-badge method-post">POST</span>
+                    <span class="endpoint-path">/v1/messages</span>
+                    <span style="font-size:0.75rem; color:#8e8e99; margin-left:auto;">Compatible Anthropic (Claude Code)</span>
+                </div>
+                <pre style="background:#0d1117; border-radius:8px; padding:1rem; overflow-x:auto; margin:0.5rem 0 0; font-size:0.82rem;"><code style="font-family:'Fira Code';">{
+  "model": "claude-3-5-sonnet-20240620",  // mappé vers Qwen3-32B
+  "max_tokens": 1024,
+  "messages": [{"role": "user", "content": "Bonjour"}]
+}</code></pre>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header">
+                    <span class="method-badge method-get">GET</span>
+                    <span class="endpoint-path">/v1/models &nbsp; | &nbsp; /api/models</span>
+                    <span style="font-size:0.75rem; color:#8e8e99; margin-left:auto;">Lister les modèles</span>
+                </div>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header">
+                    <span class="method-badge method-post">POST</span>
+                    <span class="endpoint-path">/api/upload</span>
+                    <span style="font-size:0.75rem; color:#8e8e99; margin-left:auto;">Uploader un fichier (txt, md, pdf, csv, xlsx)</span>
+                </div>
+                <p style="font-size:0.85rem; color:#8e8e99; margin:0.5rem 0 0;">Form-data avec champ <code>file</code>. Retourne le contenu extrait du fichier.</p>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header">
+                    <span class="method-badge method-post">POST</span>
+                    <span class="endpoint-path">/api/export/{fmt}</span>
+                    <span style="font-size:0.75rem; color:#8e8e99; margin-left:auto;">Exporter une réponse (txt, md, docx, xlsx, pdf)</span>
+                </div>
+                <pre style="background:#0d1117; border-radius:8px; padding:1rem; overflow-x:auto; margin:0.5rem 0 0; font-size:0.82rem;"><code style="font-family:'Fira Code';">{
+  "content": "Texte à exporter…",
+  "filename": "mon_rapport"    // optionnel
+}</code></pre>
+            </div>
+        </div>
+
+        <!-- CLI Examples -->
+        <div class="docs-section">
+            <h2>🖥️ Exemples CLI</h2>
+            <p style="color:#8e8e99; margin-bottom:1rem;">Utilisez LiteAI avec <code>curl</code>, <code>llm</code>, Claude Code, ou tout outil compatible OpenAI.</p>
+
+            <div class="endpoint">
+                <p style="font-size:0.8rem; color:#8e8e99; margin-bottom:0.5rem;">curl — Chat simple</p>
+                <pre style="background:#0d1117; border-radius:8px; padding:1rem; overflow-x:auto; margin:0; font-size:0.82rem;"><code style="font-family:'Fira Code';">curl -X POST http://localhost:5000/v1/chat/completions \
+  -H "Authorization: Bearer sk-liteai-12345" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"qwen3-32b","messages":[{"role":"user","content":"Bonjour"}]}'</code></pre>
+            </div>
+
+            <div class="endpoint">
+                <p style="font-size:0.8rem; color:#8e8e99; margin-bottom:0.5rem;">Upload d'un fichier PDF</p>
+                <pre style="background:#0d1117; border-radius:8px; padding:1rem; overflow-x:auto; margin:0; font-size:0.82rem;"><code style="font-family:'Fira Code';">curl -X POST http://localhost:5000/api/upload \
+  -H "X-API-Key: sk-liteai-12345" \
+  -F "file=@document.pdf"</code></pre>
+            </div>
+
+            <div class="endpoint">
+                <p style="font-size:0.8rem; color:#8e8e99; margin-bottom:0.5rem;">Export en PDF</p>
+                <pre style="background:#0d1117; border-radius:8px; padding:1rem; overflow-x:auto; margin:0; font-size:0.82rem;"><code style="font-family:'Fira Code';">curl -X POST http://localhost:5000/api/export/pdf \
+  -H "X-API-Key: sk-liteai-12345" \
+  -H "Content-Type: application/json" \
+  -d '{"content":"Mon rapport...","filename":"rapport"}' \
+  --output rapport.pdf</code></pre>
+            </div>
+
+            <div class="endpoint">
+                <p style="font-size:0.8rem; color:#8e8e99; margin-bottom:0.5rem;">Configuration Claude Code</p>
+                <pre style="background:#0d1117; border-radius:8px; padding:1rem; overflow-x:auto; margin:0; font-size:0.82rem;"><code style="font-family:'Fira Code';">ANTHROPIC_BASE_URL=http://localhost:5000
+ANTHROPIC_API_KEY=sk-liteai-12345
+claude --model claude-3-5-sonnet-20240620</code></pre>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

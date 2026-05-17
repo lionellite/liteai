@@ -1,0 +1,13 @@
+flask
+flask-cors
+flask-login
+flask-sqlalchemy
+huggingface_hub>=0.28.0
+python-dotenv
+werkzeug
+psycopg2-binary
+PyPDF2
+pandas
+openpyxl
+python-docx
+reportlab
